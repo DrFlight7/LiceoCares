@@ -192,10 +192,8 @@ const Layout = ({ children }) => {
           <div className="flex justify-between items-center h-16">
             {/* Logo - always on left */}
             <Link to="/" className="flex items-center space-x-2 sm:space-x-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gold-500 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-maroon-800 font-bold text-sm sm:text-lg">
-                  L
-                </span>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-white p-0.5">
+                <img src="/ldcu.ico" alt="LDCU Logo" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-sm sm:text-lg font-bold">Liceo Cares</h1>
