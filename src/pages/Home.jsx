@@ -478,7 +478,7 @@ const Home = () => {
   const features = [
     {
       icon: FileText,
-      title: "Submit Complaint(s)",
+      title: "Submit Comments or Suggestions",
       description:
         "Easily submit your concerns through our streamlined feedback form. Anonymous submissions are welcome.",
       color: "bg-maroon-800",
