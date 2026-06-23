@@ -23,8 +23,17 @@ import {
   Loader2,
 } from "lucide-react";
 
+const placeholderTexts = [
+  "Share your concern with us - we're here to help...",
+  "Report issues about facilities, academics, or services...",
+  "Your feedback helps improve our university community...",
+  "Experiencing problems on campus? Let us know here...",
+  "We value your voice - every feedback is reviewed carefully...",
+  "Help us serve you better by sharing your concerns...",
+];
+
 const Home = () => {
-  const { user, isStudent, studentProfile } = useAuth();
+  const { user, studentProfile } = useAuth();
   const [complaint, setComplaint] = useState("");
   const [category, setCategory] = useState("");
   const [images, setImages] = useState([]);
@@ -50,18 +59,6 @@ const Home = () => {
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [allowGuestLogin, setAllowGuestLogin] = useState(false);
-
-  const placeholderTexts = [
-    "Share your concern with us - we're here to help...",
-    "Report issues about facilities, academics, or services...",
-    "Your feedback helps improve our university community...",
-    "Experiencing problems on campus? Let us know here...",
-    "We value your voice - every feedback is reviewed carefully...",
-    "Help us serve you better by sharing your concerns...",
-    "From classroom issues to campus safety - we listen...",
-    "Anonymous submissions welcome - your privacy matters...",
-    "Together we can make Liceo a better place for everyone...",
-  ];
   const [personalDetails, setPersonalDetails] = useState({
     name: "",
     email: "",
@@ -414,12 +411,25 @@ const Home = () => {
           .from("attachments")
           .upload(fileName, file);
 
-        if (!uploadError) {
-          const {
-            data: { publicUrl },
-          } = supabase.storage.from("attachments").getPublicUrl(fileName);
-          uploadedUrls.push(publicUrl);
+        if (uploadError) {
+          console.error("Attachment upload error:", uploadError);
+          throw new Error(
+            uploadError.message ||
+              `Failed to upload attachment ${file.name}. Please check file type and size.`
+          );
         }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("attachments").getPublicUrl(fileName);
+
+        if (!publicUrl) {
+          throw new Error(
+            `Unable to generate public URL for ${file.name}. Check storage permissions and bucket access.`
+          );
+        }
+
+        uploadedUrls.push(publicUrl);
       }
 
       const { data: complaintData, error: insertError } = await supabase
@@ -442,6 +452,26 @@ const Home = () => {
         .single();
 
       if (insertError) throw insertError;
+
+      if (uploadedUrls.length > 0) {
+        const attachmentPayload = uploadedUrls.map((url) => ({
+          complaint_id: complaintData.id,
+          attachment_url: url,
+        }));
+
+        const { error: attachmentInsertError } = await supabase
+          .from("complaint_attachments")
+          .insert(attachmentPayload);
+
+        if (attachmentInsertError) {
+          console.error("Error saving attachment references:", attachmentInsertError);
+          await supabase.from("complaints").delete().eq("id", complaintData.id);
+          throw new Error(
+            attachmentInsertError.message ||
+              "Failed to save attachment metadata. Please try again."
+          );
+        }
+      }
 
       await recordSubmission(ipAddress, complaintData?.id);
 

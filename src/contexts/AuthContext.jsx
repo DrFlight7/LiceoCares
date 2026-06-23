@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components, no-unused-vars */
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
@@ -99,111 +100,94 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const handleUserSession = async (authUser) => {
-    // First, check if they exist in the staff/admin users table
-    // We must do this even for @liceo.edu.ph emails because staff use them too
-    const isStaff = await checkAndHandleStaffRole(authUser.id)
-    
-    if (isStaff) {
-      return; // The checkAndHandleStaffRole function will sign them out and redirect
-    }
-
-    // If they aren't staff, check if they are a valid student (Google OAuth with @liceo.edu.ph)
-    const email = authUser.email || ''
-    if (email.endsWith('@liceo.edu.ph') && authUser.app_metadata?.provider === 'google') {
-      setIsStudent(true)
-      setUserRole('student')
-      // Fetch or create student profile
-      await fetchOrCreateStudentProfile(authUser)
-    } else {
-      // Not a student and not staff
-      setIsStudent(false)
-      setUserRole(null)
-    }
-  }
-
-  const fetchOrCreateStudentProfile = async (authUser) => {
     try {
-      // Check if student exists in students table
-      let { data: student, error: fetchError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('email', authUser.email)
-        .single()
+      const email = authUser.email || ''
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        // PGRST116 is "no rows returned" - that's ok, we'll create one
-        console.error('Error fetching student:', fetchError)
+      // Email domain check
+      if (!email.endsWith('@liceo.edu.ph')) {
+        await supabase.auth.signOut()
+        return
       }
 
-      if (!student) {
-        // Create new student profile
-        const { data: newStudent, error: insertError } = await supabase
-          .from('students')
-          .insert({
-            id: authUser.id,
-            email: authUser.email,
-            full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'Student',
-            avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture,
-          })
-          .select()
-          .single()
+      // Parallelize staff/admin check and student profile fetch
+      // This runs both queries concurrently instead of sequentially
+      const [staffCheckResult, studentResult] = await Promise.all([
+        supabase
+          .from('users')
+          .select('role, department')
+          .eq('id', authUser.id)
+          .maybeSingle(),
+        authUser.app_metadata?.provider === 'google'
+          ? supabase
+              .from('students')
+              .select('*')
+              .eq('email', email)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null })
+      ])
 
-        if (insertError) {
-          console.error('Error creating student profile:', insertError)
-        } else if (newStudent) {
-          student = newStudent
-        }
+      // Check if staff/admin
+      const { data: staffData, error: staffError } = staffCheckResult
+      if (staffError && staffError.code !== 'PGRST116') {
+        console.error('Error checking staff role:', staffError)
       }
 
-      setStudentProfile(student)
-    } catch (err) {
-      console.error('fetchOrCreateStudentProfile error:', err)
-      // Still set a basic profile from auth data
-      setStudentProfile({
-        email: authUser.email,
-        full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'Student',
-      })
-    }
-  }
-
-  const checkAndHandleStaffRole = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('role, department')
-        .eq('id', userId)
-        .maybeSingle()
-
-      if (error) {
-        console.error('Error fetching user role:', error)
-        return false
-      }
-
-      if (data && data.role && data.role !== 'student') {
-        // This is a staff/admin account — they must not use the student portal
+      if (staffData?.role && staffData.role !== 'student') {
+        // This is a staff/admin account — must not use student portal
         const formatRole = (role) =>
           role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
-        // Store message in sessionStorage so it survives the sign-out redirect
         sessionStorage.setItem(
           'wrongRoleError',
-          `Your account is a ${formatRole(data.role)}. You should login through the correct channels.`
+          `Your account is a ${formatRole(staffData.role)}. You should login through the correct channels.`
         )
-
-        // Sign them out and redirect to student login page
         await supabase.auth.signOut({ scope: 'global' })
         window.location.replace('/student-login')
-        return true // Yes, they are staff
+        return
       }
-      
-      return false // Not staff
+
+      // Valid student with Google OAuth
+      if (email.endsWith('@liceo.edu.ph') && authUser.app_metadata?.provider === 'google') {
+        setIsStudent(true)
+        setUserRole('student')
+
+        // Handle student profile
+        const { data: student } = studentResult
+
+        if (!student) {
+          // Create new student profile
+          try {
+            const { data: newStudent } = await supabase
+              .from('students')
+              .insert({
+                id: authUser.id,
+                email: authUser.email,
+                full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'Student',
+                avatar_url: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture,
+              })
+              .select()
+              .single()
+            setStudentProfile(newStudent)
+          } catch (err) {
+            console.error('Error creating student profile:', err)
+            setStudentProfile({
+              email: authUser.email,
+              full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'Student',
+            })
+          }
+        } else {
+          setStudentProfile(student)
+        }
+      } else {
+        // Not a valid student
+        setIsStudent(false)
+        setUserRole(null)
+      }
     } catch (err) {
-      console.error('fetchUserRole error:', err)
-      return false
+      console.error('handleUserSession error:', err)
     }
   }
 
-  // Legacy fetchUserRole (keep it for any other uses, just to be safe, but modified to not redirect)
   const fetchUserRole = async (userId) => {
     try {
       const { data, error } = await supabase

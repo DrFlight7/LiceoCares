@@ -79,6 +79,16 @@ CREATE TABLE IF NOT EXISTS audit_trail (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Complaint attachments table for multiple evidence files
+CREATE TABLE IF NOT EXISTS complaint_attachments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  complaint_id UUID NOT NULL REFERENCES complaints(id) ON DELETE CASCADE,
+  attachment_url TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_complaint_attachments_complaint ON complaint_attachments(complaint_id);
+
 -- Insert default departments
 INSERT INTO departments (name, code, description, is_active) VALUES
   ('Academic Affairs', 'academic', 'Academic-related concerns and issues', true),
@@ -88,6 +98,11 @@ INSERT INTO departments (name, code, description, is_active) VALUES
   ('Security Office', 'security', 'Safety and security concerns', true),
   ('Other', 'other', 'General concerns not covered by other categories', true)
 ON CONFLICT (code) DO NOTHING;
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_users_id_role ON users(id, role);
+CREATE INDEX IF NOT EXISTS idx_students_email ON students(email);
+CREATE INDEX IF NOT EXISTS idx_students_id ON students(id);
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_complaints_reference ON complaints(reference_number);

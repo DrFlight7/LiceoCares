@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -64,18 +64,12 @@ const DepartmentDashboard = () => {
     },
   };
 
-  useEffect(() => {
-    if (userDepartment) {
-      fetchComplaints();
-    }
-  }, [userDepartment, filterStatus]);
-
-  const fetchComplaints = async () => {
+  const fetchComplaints = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase
         .from("complaints")
-        .select("*")
+        .select("*, complaint_attachments(*)")
         .eq("assigned_department", userDepartment)
         .in("status", ["verified", "in_progress", "resolved"])
         .order("created_at", { ascending: false });
@@ -93,7 +87,13 @@ const DepartmentDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus, userDepartment]);
+
+  useEffect(() => {
+    if (userDepartment) {
+      fetchComplaints();
+    }
+  }, [userDepartment, fetchComplaints]);
 
   const handleStartProgress = async () => {
     setActionLoading(true);
@@ -177,12 +177,16 @@ const DepartmentDashboard = () => {
 
       if (uploadError) {
         console.error("Upload error:", uploadError);
-      } else {
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("attachments").getPublicUrl(fileName);
-        resolutionImageUrl = publicUrl;
+        throw new Error(
+          uploadError.message ||
+            "Failed to upload resolution image. Check storage permissions and try again."
+        );
       }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("attachments").getPublicUrl(fileName);
+      resolutionImageUrl = publicUrl;
 
       const { error: updateError } = await supabase
         .from("complaints")
@@ -227,6 +231,16 @@ const DepartmentDashboard = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const getAttachments = (complaint) => {
+    if (complaint?.complaint_attachments?.length > 0) {
+      return complaint.complaint_attachments;
+    }
+    if (complaint?.attachment_url) {
+      return [{ attachment_url: complaint.attachment_url }];
+    }
+    return [];
   };
 
   const categories = [
@@ -480,7 +494,7 @@ const DepartmentDashboard = () => {
                     </div>
 
                     {/* Attachment indicator */}
-                    {complaint.attachment_url && (
+                    {(complaint.complaint_attachments?.length > 0 || complaint.attachment_url) && (
                       <div className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
                         <Image size={16} />
                         <span>Has attachment</span>
@@ -615,26 +629,30 @@ const DepartmentDashboard = () => {
                 )}
 
                 {/* Feedback Evidence Image */}
-                {selectedComplaint.attachment_url && (
+                {getAttachments(selectedComplaint).length > 0 && (
                   <div>
                     <p className="text-sm text-gray-500 mb-2">
                       Feedback Evidence
                     </p>
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <img
-                        src={selectedComplaint.attachment_url}
-                        alt="Feedback Evidence"
-                        className="max-h-64 rounded-lg border border-gray-200 mb-2"
-                      />
-                      <a
-                        href={selectedComplaint.attachment_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-2 text-maroon-800 hover:text-maroon-600 text-sm"
-                      >
-                        <Eye size={16} />
-                        <span>View Full Image</span>
-                      </a>
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                      {getAttachments(selectedComplaint).map((attachment) => (
+                        <div key={attachment.id || attachment.attachment_url}>
+                          <img
+                            src={attachment.attachment_url}
+                            alt="Feedback Evidence"
+                            className="max-h-64 rounded-lg border border-gray-200 mb-2 w-full object-contain"
+                          />
+                          <a
+                            href={attachment.attachment_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center space-x-2 text-maroon-800 hover:text-maroon-600 text-sm"
+                          >
+                            <Eye size={16} />
+                            <span>View Full Image</span>
+                          </a>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

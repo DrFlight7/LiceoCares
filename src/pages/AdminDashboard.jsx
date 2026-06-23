@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -74,16 +74,12 @@ const AdminDashboard = () => {
     },
   };
 
-  useEffect(() => {
-    fetchComplaints();
-  }, [filterStatus]);
-
-  const fetchComplaints = async () => {
+  const fetchComplaints = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase
         .from("complaints")
-        .select("*")
+        .select("*, complaint_attachments(*)")
         .order("created_at", { ascending: false });
 
       if (filterStatus !== "all") {
@@ -99,7 +95,11 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus]);
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
 
   const handleApprove = async () => {
     if (!selectedDepartment) {
@@ -192,6 +192,18 @@ const AdminDashboard = () => {
       minute: "2-digit",
     });
   };
+
+  const getAttachments = (complaint) => {
+    if (complaint?.complaint_attachments?.length > 0) {
+      return complaint.complaint_attachments;
+    }
+    if (complaint?.attachment_url) {
+      return [{ attachment_url: complaint.attachment_url }];
+    }
+    return [];
+  };
+
+  const hasAttachments = (complaint) => getAttachments(complaint).length > 0;
 
   const categories = [
     { value: "all", label: "All Categories" },
@@ -452,7 +464,7 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* Attachment indicator */}
-                    {complaint.attachment_url && (
+                    {hasAttachments(complaint) && (
                       <div className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
                         <Image size={16} />
                         <span>Has attachment</span>
@@ -578,26 +590,30 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Feedback Evidence Image */}
-                {selectedComplaint.attachment_url && (
+                {getAttachments(selectedComplaint).length > 0 && (
                   <div>
                     <p className="text-sm text-gray-500 mb-2">
                       Feedback Evidence
                     </p>
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <img
-                        src={selectedComplaint.attachment_url}
-                        alt="Feedback Evidence"
-                        className="max-h-64 rounded-lg border border-gray-200 mb-2"
-                      />
-                      <a
-                        href={selectedComplaint.attachment_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-2 text-maroon-800 hover:text-maroon-600 text-sm"
-                      >
-                        <Eye size={18} />
-                        <span>View Full Image</span>
-                      </a>
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                      {getAttachments(selectedComplaint).map((attachment) => (
+                        <div key={attachment.id || attachment.attachment_url}>
+                          <img
+                            src={attachment.attachment_url}
+                            alt="Feedback Evidence"
+                            className="max-h-64 rounded-lg border border-gray-200 mb-2 w-full object-contain"
+                          />
+                          <a
+                            href={attachment.attachment_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center space-x-2 text-maroon-800 hover:text-maroon-600 text-sm"
+                          >
+                            <Eye size={18} />
+                            <span>View Full Image</span>
+                          </a>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

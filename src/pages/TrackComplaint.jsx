@@ -50,6 +50,17 @@ const TrackComplaint = () => {
     }
   }, [urlRefNumber, queryRefNumber]);
 
+  // Helper to get attachments with fallback for legacy single attachment_url
+  const getAttachments = (complaint) => {
+    if (complaint?.complaint_attachments?.length > 0) {
+      return complaint.complaint_attachments;
+    }
+    if (complaint?.attachment_url) {
+      return [{ id: complaint.id, attachment_url: complaint.attachment_url }];
+    }
+    return [];
+  };
+
   const statusConfig = {
     submitted: {
       label: "Submitted",
@@ -112,7 +123,7 @@ const TrackComplaint = () => {
     try {
       const { data, error: fetchError } = await supabase
         .from("complaints")
-        .select("*")
+        .select("*, complaint_attachments(*)")
         .eq("reference_number", ref.toUpperCase())
         .single();
 
@@ -167,7 +178,7 @@ const TrackComplaint = () => {
     try {
       const { data, error: fetchError } = await supabase
         .from("complaints")
-        .select("*")
+        .select("*, complaint_attachments(*)")
         .eq("reference_number", referenceNumber.toUpperCase())
         .single();
 
@@ -555,6 +566,41 @@ const TrackComplaint = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Feedback Evidence Images */}
+              {getAttachments(complaint).length > 0 && (
+                <div className="border-t border-gray-100 pt-4 mt-4">
+                  <div className="flex items-start space-x-3">
+                    <FileText size={20} className="text-gray-400 mt-0.5" />
+                    <div className="flex-1 w-full">
+                      <p className="text-sm text-gray-500 mb-3">Feedback Evidence</p>
+                      <div className="space-y-3">
+                        {getAttachments(complaint).map((attachment) => (
+                          <div key={attachment.id || attachment.attachment_url} className="bg-gray-50 rounded-lg p-3">
+                            <img
+                              src={attachment.attachment_url}
+                              alt="Feedback Evidence"
+                              className="max-h-64 rounded-lg border border-gray-200 w-full object-contain mb-2"
+                              onError={(e) => {
+                                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"%3E%3Cpath stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /%3E%3C/svg%3E';
+                              }}
+                            />
+                            <a
+                              href={attachment.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-2 text-maroon-800 hover:text-maroon-600 text-sm"
+                            >
+                              <Eye size={16} />
+                              <span>View Full Image</span>
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {complaint.resolution_details && (
                 <div className="border-t border-gray-100 pt-4 mt-4">
