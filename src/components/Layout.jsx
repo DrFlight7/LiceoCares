@@ -369,7 +369,7 @@ const Layout = ({ children }) => {
                   className="flex items-center space-x-2 px-4 py-2 bg-gold-500 text-maroon-800 rounded-lg hover:bg-gold-400 transition-all duration-200 font-semibold"
                 >
                   <LogIn size={18} />
-                  <span>Student Login</span>
+                  <span>Login</span>
                 </Link>
               )}
             </nav>
@@ -507,7 +507,7 @@ const Layout = ({ children }) => {
                     className="flex items-center space-x-3 px-4 py-3 bg-gold-500 text-maroon-800 rounded-lg font-semibold"
                   >
                     <LogIn size={20} />
-                    <span>Student Login</span>
+                    <span>Login</span>
                   </Link>
                 )}
               </nav>
